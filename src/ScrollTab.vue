@@ -1,7 +1,7 @@
 <template>
   <div class="scroll-tab">
-    <ul class="tab-list" ref="tabs">
-      <li class="tab-item" :ref="'tab_' + i" v-for="(item, i) in tabs" :key='i' @click="actionTab(item, i)" :class="{active: value.key === item.key}" :style="value.key === item.key && tabStyle">{{item.label}}</li>
+    <ul class="tab-list" ref="tabs" :style='containStyle'>
+      <li class="tab-item" :ref="'tab_' + i" v-for="(item, i) in tabs" :key='i' @click="actionTab(item, i)" :class="{active: value.key === item.key}" :style="[defaultTabStyle, value.key === item.key && tabStyle]">{{item.label}}</li>
       <li class="line" :style="lineStyle" v-if="value.key || value.key === 0"></li>
     </ul>
   </div>
@@ -11,12 +11,22 @@ export default {
   props: {
     value: {
       type: Object,
-      default: null,
+      default: {
+        key: 0,
+      },
     },
     tabs: Array,
     color: {
       type: String,
-      default: 'red',
+      default: '#f53b10',
+    },
+    bgColor: {
+      type: String,
+      default: '#fff',
+    },
+    tabsStyle: {
+      type: Object,
+      default: () => ({}),
     },
   },
   data() {
@@ -32,12 +42,33 @@ export default {
       },
       lineStyle: {
         width: 0,
-        background: 'red',
+        background: '#f53b10',
         left: 0,
       },
+      duration: 0,
+      animation: null,
     };
   },
-  computed: {},
+  computed: {
+    containStyle() {
+      let defaultStyle = {
+        background: this.bgColor,
+      };
+      if (Object.keys(this.tabsStyle).length > 0) {
+        defaultStyle = { ...defaultStyle, ...this.tabsStyle };
+      }
+      return defaultStyle;
+    },
+    defaultTabStyle() {
+      const sty = {};
+      const len = this.tabs.length;
+      if (len <= 4) {
+        sty.flex = '1 auto';
+        sty.whiteSpace = 'nowrap';
+      }
+      return sty;
+    },
+  },
   methods: {
     actionTab(item, i) {
       if (this.ready) {
@@ -55,27 +86,32 @@ export default {
       let count = 0;
       const scrollDuration = 15;
       const tabs = this.refTabs;
-      const tabsMiddle = tabs.offsetWidth / 2;
+      const tabsMiddle = document.body.offsetWidth / 2; // 容器中间
       const tabStart = (currentIndexTab.offsetLeft - tabs.scrollLeft)
         + (currentIndexTab.offsetWidth / 2);
+
+      this.duration = (tabStart - tabsMiddle) / scrollDuration;
       const step = () => {
-        const duration = (tabStart - tabsMiddle) / scrollDuration;
-        tabs.scrollLeft += duration;
+        if (this.animation) {
+          window.cancelAnimationFrame(this.animation);
+        }
+
+        tabs.scrollLeft += this.duration;
         this.currentOffset = tabs.scrollLeft;
         count += 1;
         if (count < scrollDuration) {
-          window.requestAnimationFrame(step);
+          this.animation = window.requestAnimationFrame(step);
         } else {
           this.ready = true;
         }
       };
-      window.requestAnimationFrame(step);
+      this.animation = window.requestAnimationFrame(step);
       this.lineSlider(); // 下滑线动效
     },
     lineSlider() {
       this.lineStyle.width = `${this.refCurrentTab.offsetWidth}px`;
       this.lineStyle.left = `${((this.refCurrentTab.offsetLeft)
-          / this.refTabs.offsetWidth).toFixed(2) * 100}%`;
+          / document.body.offsetWidth).toFixed(2) * 100}%`;
     },
     emitValue(value) {
       this.$emit('input', value);
@@ -85,7 +121,6 @@ export default {
         if (this.value.key || this.value.key === 0) {
           const tab = list[this.value.key];
           if (tab) this.current = tab;
-          // if (tab) this.$emit('input', tab);
         }
       });
     },
@@ -93,13 +128,14 @@ export default {
   mounted() {
     this.nextTickCb(this.tabs);
     this.refTabs = this.$refs.tabs;
-    this.tabStyle.color = this.color;
-    this.lineStyle.background = this.color;
-    this.refTabs.childNodes.forEach((i) => {
-      if (i.className === 'tab-item') {
-        this.refTabsWidth += i.clientWidth;
+    this.tabStyle.color = this.color || '#f23d22';
+    this.lineStyle.background = this.color || '#f23d22';
+    for (let i = 0; i < this.refTabs.childNodes.length; i += 1) {
+      const item = this.refTabs.childNodes[i];
+      if (item.className === 'tab-item') {
+        this.refTabsWidth += item.clientWidth;
       }
-    });
+    }
   },
   watch: {
     tabs(val) {
@@ -113,9 +149,15 @@ export default {
     current(val) {
       if (val.key || val.key === 0) {
         const findIndex = this.tabs.findIndex(i => i.key === val.key);
-        this.refCurrentTab = findIndex !== -1 && this.$refs[`tab_${findIndex}`][0]; // eslint-disable-line
+        if (findIndex !== -1 && this.$refs[`tab_${findIndex}`]) {
+          const tab = this.$refs[`tab_${findIndex}`][0];
+          this.refCurrentTab = tab;
+        }
       }
-      this.scrollToActiveTab();
+      if (this.refCurrentTab) {
+        this.ready = true;
+        this.scrollToActiveTab();
+      }
     },
   },
 };
@@ -138,16 +180,16 @@ export default {
     position: relative;
     overflow: hidden;
     overflow-x: scroll;
+    -webkit-overflow-scrolling: touch;
+    -webkit-scroll-snap-type: mandatory;
     .tab-item {
       list-style-type: none;
-      background: #fff;
       flex-shrink: 0;
-      justify-content: center;
-      align-items: center;
       text-align: center;
-      padding: 0 0.5rem;
+      padding: 0 0.1rem;
+      margin: 0 0.2rem;
       &.active {
-        color: red;
+        color: #f53b10;
       }
     }
     .line {
@@ -157,8 +199,8 @@ export default {
       bottom: 0;
       height: 3px;
       width: 50px;
-      background: #000;
       transition: all 0.3s;
+      color: #f53b10;
     }
   }
 }
