@@ -8,6 +8,10 @@
 | tabs | Array | 数组[｛ key: 0, label: '' ｝] |
 | color | String | 字符串，可以为'black'或者'#000'  |
 
+### 安装
+```js
+npm install vue-light-scrolltab
+```
 
 #### 注意
 请勿用于线上
